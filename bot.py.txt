@@ -1,1 +1,93 @@
-print("Mon bot fonctionne")
+import os
+import requests
+import numpy as np
+import time
+import schedule
+from telegram import Bot
+
+# 🔐 ENV
+TOKEN = os.getenv("TOKEN")
+API_KEY = os.getenv("API_KEY")
+CHAT_ID = os.getenv("CHAT_ID")
+
+bot = Bot(token=TOKEN)
+
+HEADERS = {"x-apisports-key": API_KEY}
+BASE_URL = "https://v3.football.api-sports.io"
+
+
+# =========================
+# 📊 MATCHS DU JOUR
+# =========================
+def get_today_matches():
+url = f"{BASE_URL}/fixtures?date={time.strftime('%Y-%m-%d')}"
+r = requests.get(url, headers=HEADERS)
+return r.json()["response"]
+
+
+# =========================
+# 🧠 SIMULATION PROBA
+# =========================
+def match_probability():
+# simulation simplifiée (tu pourras améliorer avec Elo)
+return {
+"home_win": np.random.uniform(0.45, 0.75),
+"away_win": np.random.uniform(0.20, 0.40),
+"over25": np.random.uniform(0.55, 0.80),
+}
+
+
+# =========================
+# 💰 PICK MATCH
+# =========================
+def get_top_bets():
+matches = get_today_matches()
+
+bets = []
+
+for m in matches:
+home = m["teams"]["home"]["name"]
+away = m["teams"]["away"]["name"]
+
+p = match_probability()
+
+# 🟢 filtre value bets
+if p["home_win"] > 0.62:
+bets.append(f"🏆 {home} gagne vs {away} ({p['home_win']*100:.0f}%)")
+
+if p["over25"] > 0.65:
+bets.append(f"⚽ Over 2.5 {home} vs {away} ({p['over25']*100:.0f}%)")
+
+# top 3 seulement
+return bets[:3]
+
+
+# =========================
+# 📩 ENVOI TELEGRAM
+# =========================
+def send_daily_bets():
+bets = get_top_bets()
+
+if not bets:
+message = "❌ Aucun value bet aujourd’hui"
+else:
+message = "🔥 PARIS DU JOUR VIP 🔥\n\n"
+for i, b in enumerate(bets, 1):
+message += f"{i}. {b}\n"
+
+message += "\n📊 Analyse automatique bot VIP"
+
+bot.send_message(chat_id=CHAT_ID, text=message)
+
+
+# =========================
+# ⏰ PLANIFICATION
+# =========================
+schedule.every().day.at("09:00").do(send_daily_bets)
+
+
+print("🤖 BOT VIP ACTIF")
+
+while True:
+schedule.run_pending()
+time.sleep(60)
